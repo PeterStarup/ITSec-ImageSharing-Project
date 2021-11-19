@@ -3,6 +3,8 @@ import sqlite3
 from flask import Flask, request, session, g, redirect, url_for, \
     abort, render_template, flash
 import base64
+from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+from flask_httpauth import HTTPTokenAuth
 
 # configuration
 # DATABASE = './tmp/database.db'
@@ -18,6 +20,25 @@ app = Flask(__name__)
 app.config.from_object(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.jinja_env.autoescape = True
+app.config['SECRET_KEY'] = 'top secret!'
+token_serializer = Serializer(app.config['SECRET_KEY'], expires_in=3600)
+
+auth = HTTPTokenAuth('Bearer')
+
+users = ['john', 'susan']
+for user in users:
+    token = token_serializer.dumps({'username': user}).decode('utf-8')
+    print('*** token for {}: {}\n'.format(user, token))
+
+
+@auth.verify_token
+def verify_token(token):
+    try:
+        data = token_serializer.loads(token)
+    except:  # noqa: E722
+        return False
+    if 'username' in data:
+        return data['username']
 
 
 @app.before_request
@@ -108,6 +129,7 @@ def logout():
 
 
 @app.route('/add', methods=['POST'])
+@auth.login_required()
 def add_entry():
     if not session.get('logged_in'):
         abort(401)
@@ -124,6 +146,7 @@ def allowed_file(filename):
 
 
 @app.route('/upload', methods=['GET', 'POST'])
+@auth.login_required()
 def upload():
     if request.method == 'POST':
         file = request.files['file']
@@ -152,6 +175,7 @@ def blob_to_image(filename, ablob):
 
 
 @app.route('/profile', methods=['GET'])
+@auth.login_required()
 def profile():
     id = session.get('user_id')
 
@@ -167,6 +191,7 @@ def profile():
 
 
 @app.route('/showimage/<id>/', methods=['GET'])
+@auth.login_required()
 def show_image(id):
     user_id = get_userid()
     if has_permission(id, user_id):
@@ -209,6 +234,7 @@ def has_permission(img_id, user_id):
 
 
 @app.route('/shareimage', methods=['POST'])
+@auth.login_required()
 def share_image():
     if request.method == 'POST':
         image_id = request.form['imageid']
@@ -223,6 +249,7 @@ def share_image():
 
 
 @app.route('/unshare', methods=['POST'])
+@auth.login_required()
 def unshare():
     if request.method == 'POST':
         shared_id = request.form['shareduser']
@@ -237,11 +264,13 @@ def unshare():
 
 
 @app.route('/no_way', methods=['GET'])
+@auth.login_required()
 def no_way():
     return render_template('no_way.html')
 
 
 @app.route('/add_comment', methods=['POST'])
+@auth.login_required()
 def add_comment():
     if request.method == 'POST':
         # TODO: needs to check for access
