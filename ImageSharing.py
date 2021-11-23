@@ -96,7 +96,7 @@ def create():
     return render_template('create.html', error=error)
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['POST'])
 def login():
     error = None
     if request.method == 'POST':
