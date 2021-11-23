@@ -1,11 +1,12 @@
 import os
 import sqlite3
 from flask import Flask, request, session, g, redirect, url_for, \
-    abort, render_template, flash
+    abort, render_template, flash, jsonify
 import base64
 from flask_sqlalchemy import SQLAlchemy
-from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
+from itsdangerous import TimedJSONWebSignatureSerializer as Serializer, BadSignature, SignatureExpired
 from flask_httpauth import HTTPTokenAuth
+# from User import User
 
 # configuration
 # DATABASE = './tmp/database.db'
@@ -26,7 +27,7 @@ token_serializer = Serializer(app.config['SECRET_KEY'], expires_in=3600)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tmp/database.db'
 db = SQLAlchemy(app)
 
-auth = HTTPTokenAuth('Bearer')
+auth = HTTPTokenAuth(scheme='JWT')
 
 users = ['john', 'susan']
 for user in users:
@@ -38,10 +39,13 @@ for user in users:
 def verify_token(token):
     try:
         data = token_serializer.loads(token)
-    except:  # noqa: E722
-        return False
-    if 'username' in data:
-        return data['username']
+    except BadSignature:
+        # AuthFailed custom exception type
+        raise SystemError("Badsig")
+    except SignatureExpired:
+        raise SystemError("Expiredsig")
+    # Verify pass returns True
+    return True
 
 
 @app.before_request
@@ -96,28 +100,22 @@ def create():
     return render_template('create.html', error=error)
 
 
-@app.route('/login', methods=['POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        user = request.json['username']
+        password = request.json['password']
 
-        cur = g.db.execute("select password from user where username = '{}'".format(username))
-        pass_db = [dict(password=row[0]) for row in cur.fetchall()]
-        if pass_db[0].get('password') is None:
+        guest = db.User.query.filter_by(username=user).first()
+
+        if guest.password is None:
             error = 'Invalid username or password'
             return render_template('login.html', error=error)
-        p = pass_db[0].get('password')
+        p = guest.password
 
         if p == password:
-            cur = g.db.execute("select id from user where username = '{}'".format(username))
-            rows = [dict(id=row[0]) for row in cur.fetchall()]
-            user_id = rows[0].get('id')
-
-            session['logged_in'] = True
-            session['user_id'] = user_id
-            flash('You were logged in')
+            db.User.create_token(guest.id)
             return redirect(url_for('profile'))
         else:
             error = 'Invalid username or password'
