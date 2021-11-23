@@ -3,6 +3,7 @@ import sqlite3
 from flask import Flask, request, session, g, redirect, url_for, \
     abort, render_template, flash
 import base64
+from flask_sqlalchemy import SQLAlchemy
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from flask_httpauth import HTTPTokenAuth
 
@@ -22,6 +23,8 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.jinja_env.autoescape = True
 app.config['SECRET_KEY'] = 'top secret!'
 token_serializer = Serializer(app.config['SECRET_KEY'], expires_in=3600)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tmp/database.db'
+db = SQLAlchemy(app)
 
 auth = HTTPTokenAuth('Bearer')
 
